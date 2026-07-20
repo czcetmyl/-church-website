@@ -580,40 +580,44 @@ function render(){
 
 const newPhotos={};
 
-// ─── COMPRESS PHOTO (max 20MB input, compress to ~800px max, 0.82 quality) ───
-function compressPhoto(file, callback){
+// ─── CLOUDINARY CONFIG ───
+const CLOUD_NAME='vnylmxyg';
+const UPLOAD_PRESET='eszcrhpt';
+
+async function uploadToCloudinary(file){
   const MAX_MB=30;
   if(file.size>MAX_MB*1024*1024){
     showToast('File too large! Max 30MB only.','#E24B4A');
-    return;
+    return null;
   }
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const img=new Image();
-    img.onload=()=>{
-      const MAX_DIM=1200;
-      let w=img.width, h=img.height;
-      if(w>MAX_DIM||h>MAX_DIM){
-        if(w>h){h=Math.round(h*MAX_DIM/w);w=MAX_DIM;}
-        else{w=Math.round(w*MAX_DIM/h);h=MAX_DIM;}
-      }
-      const canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
-      const compressed=canvas.toDataURL('image/jpeg',0.82);
-      callback(compressed);
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
+  showToast('Uploading photo…','#378ADD');
+  const formData=new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', UPLOAD_PRESET);
+  formData.append('folder','pob_birthday_greetings');
+  try{
+    const res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,{method:'POST',body:formData});
+    const data=await res.json();
+    if(data.secure_url){
+      showToast('Photo uploaded!');
+      return data.secure_url;
+    } else {
+      showToast('Upload failed. Try again.','#E24B4A');
+      return null;
+    }
+  }catch(e){
+    showToast('Upload error. Check connection.','#E24B4A');
+    return null;
+  }
 }
+
 
 function setNewPhoto(secId,evt){
   const file=evt.target.files[0];
   if(!file)return;
-  compressPhoto(file, compressed=>{
-    newPhotos[secId]=compressed;
+  uploadToCloudinary(file).then(url=>{
+    if(!url)return;
+    newPhotos[secId]=url;
     const pb=document.getElementById('pb-'+secId);
     pb.style.background='var(--teal-light)';
     pb.style.borderColor='var(--teal)';
@@ -707,12 +711,13 @@ function editEntry(secId,entId){
 function handleEditPhoto(evt,secId,entId){
   const file=evt.target.files[0];
   if(!file)return;
-  compressPhoto(file, compressed=>{
+  uploadToCloudinary(file).then(url=>{
+    if(!url)return;
     const sec=state.sections.find(s=>s.id===secId);
     const entry=sec.entries.find(en=>en.id===entId);
-    entry.photo=compressed;
+    entry.photo=url;
     const prev=document.getElementById('me-preview');
-    if(prev){prev.innerHTML=`<img src="${compressed}" style="width:100%;height:100%;object-fit:cover">`;prev.classList.remove('empty');}
+    if(prev){prev.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover">`;prev.classList.remove('empty');}
     showToast('Photo ready — click Save changes');
   });
 }
@@ -772,14 +777,14 @@ function previewPhoto(secId,entId){
 function uploadPhotoFromPreview(secId,entId,evt){
   const file=evt.target.files[0];
   if(!file)return;
-  compressPhoto(file, compressed=>{
+  uploadToCloudinary(file).then(url=>{
+    if(!url)return;
     const sec=state.sections.find(s=>s.id===secId);
     const entry=sec.entries.find(en=>en.id===entId);
-    entry.photo=compressed;
+    entry.photo=url;
     saveState();
     closeModal();
     setTimeout(()=>previewPhoto(secId,entId),100);
-    showToast('Photo uploaded!');
     render();
   });
 }
